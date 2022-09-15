@@ -6,6 +6,7 @@ import android.animation.ObjectAnimator;
 import android.app.Activity;
 import android.app.Dialog;
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.content.res.Resources;
 import android.graphics.PixelFormat;
@@ -62,14 +63,19 @@ public class SplashScreen {
         settings.setShowDuration(config.getLaunchShowDuration());
         settings.setAutoHide(config.isLaunchAutoHide());
 
-        // Method can fail if styles are incorrectly set...
-        // If it fails, log error & fallback to old method
-        try {
-            showWithAndroid12API(activity, settings);
-            return;
-        } catch (Exception e) {
-            Logger.warn("Android 12 Splash API failed... using previous method.");
-            this.onPreDrawListener = null;
+        Intent launchedIntent = activity.getIntent();
+        String action = launchedIntent.getAction();
+
+        if (action == "android.intent.action.MAIN") {
+          // Method can fail if styles are incorrectly set...
+          // If it fails, log error & fallback to old method
+          try {
+              showWithAndroid12API(activity, settings);
+              return;
+          } catch (Exception e) {
+              Logger.warn("Android 12 Splash API failed... using previous method.");
+              this.onPreDrawListener = null;
+          }
         }
 
         settings.setFadeInDuration(config.getLaunchFadeInDuration());
