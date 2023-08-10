@@ -33,6 +33,15 @@ import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
+import com.google.mlkit.vision.barcode.BarcodeScanner;
+import com.google.mlkit.vision.barcode.BarcodeScannerOptions;
+import com.google.mlkit.vision.barcode.BarcodeScanning;
+import com.google.mlkit.vision.barcode.common.Barcode;
+import com.google.mlkit.vision.common.InputImage;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -47,6 +56,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
+
 import org.json.JSONException;
 
 /**
@@ -476,7 +487,37 @@ public class CameraPlugin extends Plugin {
         }
     }
 
-    private JSObject processPickedImages(Uri imageUri) {
+  private String readBarcodes(Uri imageUri, PluginCall call, JSObject data) {
+    InputImage image;
+    try {
+      image = InputImage.fromFilePath(getContext(), imageUri);
+      BarcodeScannerOptions options =
+        new BarcodeScannerOptions.Builder()
+          .setBarcodeFormats(
+            Barcode.FORMAT_CODE_39)
+          .build();
+      BarcodeScanner scanner = BarcodeScanning.getClient();
+
+      Task<List<Barcode>> result = scanner.process(image)
+        .addOnSuccessListener(new OnSuccessListener<List<Barcode>>() {
+          @Override
+          public void onSuccess(List<Barcode> barcodes) {
+            List<String> rawValues = barcodes.stream()
+              .map(Barcode::getRawValue)
+              .collect(Collectors.toList());
+            JSArray barcodesStrings = new JSArray(rawValues);
+            data.put("barcodes", barcodesStrings);
+            call.resolve(data);
+          }
+        });
+
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+    return null;
+  }
+
+  private JSObject processPickedImages(Uri imageUri) {
         InputStream imageStream = null;
         JSObject ret = new JSObject();
         try {
@@ -665,7 +706,7 @@ public class CameraPlugin extends Plugin {
         }
 
         if (settings.getResultType() == CameraResultType.BASE64) {
-            returnBase64(call, exif, bitmapOutputStream);
+            returnBase64(call, exif, bitmapOutputStream, u);
         } else if (settings.getResultType() == CameraResultType.URI) {
             returnFileURI(call, exif, bitmap, u, bitmapOutputStream);
         } else if (settings.getResultType() == CameraResultType.DATAURL) {
@@ -767,7 +808,7 @@ public class CameraPlugin extends Plugin {
         call.resolve(data);
     }
 
-    private void returnBase64(PluginCall call, ExifWrapper exif, ByteArrayOutputStream bitmapOutputStream) {
+    private void returnBase64(PluginCall call, ExifWrapper exif, ByteArrayOutputStream bitmapOutputStream, Uri u) {
         byte[] byteArray = bitmapOutputStream.toByteArray();
         String encoded = Base64.encodeToString(byteArray, Base64.NO_WRAP);
 
@@ -775,7 +816,11 @@ public class CameraPlugin extends Plugin {
         data.put("format", "jpeg");
         data.put("base64String", encoded);
         data.put("exif", exif.toJson());
-        call.resolve(data);
+        if (call.getBoolean("shouldReadBarCodes")) {
+          readBarcodes(u, call, data);
+        } else {
+          call.resolve(data);
+        }
     }
 
     @Override
