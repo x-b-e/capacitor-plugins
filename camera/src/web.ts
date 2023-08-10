@@ -252,7 +252,7 @@ export class CameraWeb extends WebPlugin implements CameraPlugin {
       // the specific permissions that are supported varies among browsers that implement the
       // permissions API, so we need a try/catch in case 'camera' is invalid
       const permission = await window.navigator.permissions.query({
-        name: 'camera',
+        name: 'camera' as PermissionName,
       });
       return {
         camera: permission.state,
